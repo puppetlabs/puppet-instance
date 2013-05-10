@@ -40,31 +40,35 @@ Puppet::Type.type(:instance).provide(:ec2) do
   # I wanted to do a single operation to calculate all of the 
   # instance information
   def self.prefetch(resources)
-    resources_by_user = {}
-    users = {}
-    resources.each do |name, resource|
-      resources_by_user[resource[:user]] ||= []
-      resources_by_user[resource[:user]] << resource
-      users[resource[:user]] ||= resource[:pass]
-    end
-    users.each do |user, password|
-      resources = resources_by_user[user]
-      ec2 = self.new_ec2(user, password)
-      instances = self.user_instances(ec2)
-      resources_by_user[user].each do |res|
-        if instances and instances[res[:name]]
-          res.provider = instances[res[:name]]
+    if resources.is_a? Hash
+      resources_by_user = {}
+      users = {}
+      resources.each do |name, resource|
+        resources_by_user[resource[:user]] ||= []
+        resources_by_user[resource[:user]] << resource
+        users[resource[:user]] ||= resource[:pass]
+      end
+      users.each do |user, password|
+        resources = resources_by_user[user]
+        ec2 = self.new_ec2(user, password)
+        instances = self.user_instances(ec2)
+        resources_by_user[user].each do |res|
+          if instances and instances[res[:name]]
+            res.provider = instances[res[:name]]
+          end
         end
       end
+    else
+      raise Puppet::Error, "resources must be a hash"
     end
   end
 
   def create
     tags = {:Name => resource[:name], :CreatedBy => 'Puppet'}
     ec2 = self.class.new_ec2(resource[:user], resource[:pass])
-    instance = ec2.servers.create(:image_id => resource[:image],
-                                  :flavor_id => resource[:flavor],
-                                  :tags => tags)
+    ec2.servers.create(:image_id => resource[:image],
+                       :flavor_id => resource[:flavor],
+                       :tags => tags)
   end
 
   def destroy
@@ -80,14 +84,11 @@ Puppet::Type.type(:instance).provide(:ec2) do
   end
 
   #
-  # this is the method that is called for ralsh query and purging
-  #
-  # I could query based ENVIRONMENT variabels, just query the ec2 instances
-  # for a certain user/password combo
-  #
+  # Short of storing credentials on disk somewhere and then referencing them, I
+  # don't see how this will work.
   #
   def self.instances
-   raise Puppet::Error, 'instances does not make sense for ec2, must know a username and pw'
+   raise Puppet::Error, 'instances does not work for ec2, a username and password is needed'
   end
 
 end
