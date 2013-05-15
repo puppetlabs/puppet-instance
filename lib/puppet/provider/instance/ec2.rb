@@ -14,6 +14,7 @@ Puppet::Type.type(:instance).provide(:ec2) do
 
   def self.user_instances(ec2)
     results = {}
+
     # Get a list of all the instances, then parse out the tags to see which ones I have created
     instances = ec2.servers.each do |s|
       if s.tags["Name"] != nil and s.tags["CreatedBy"] == "Puppet"
@@ -77,7 +78,6 @@ Puppet::Type.type(:instance).provide(:ec2) do
 
   def exists?
     debug @property_hash.inspect
-    #@property_hash[:ensure] == :present
     !(@property_hash[:ensure] == :absent or @property_hash.empty?)
   end
 
