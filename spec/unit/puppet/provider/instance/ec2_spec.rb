@@ -27,17 +27,13 @@ describe provider_class do
   let (:provider) { resource.provider }
 
   context "::instances" do
-    it "should implement an instances method" do
-      provider.class.should respond_to(:instances)
-    end
-
     it "should error when the instances method is called" do
       expect { provider.class.instances }.to raise_error Puppet::Error, /username and password/
     end
   end
 
   context "::prefetch" do
-    it "should return nil when passed an argument other than a hash" do
+    it "should raise an error when passed an argument other than a hash" do
       expect { provider.class.prefetch(String.new) }.to raise_error Puppet::Error, /resources must be a hash/
     end
   end
@@ -50,7 +46,7 @@ describe provider_class do
   end
 
   context "::destroy" do
-    it "should return TrueClass when destroying an instance" do
+    it "should return 'shutting-down' when destroying an instance" do
       i = provider.create
       i.destroy
       i.reload

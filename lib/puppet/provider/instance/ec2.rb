@@ -30,8 +30,8 @@ Puppet::Type.type(:instance).provide(:ec2) do
       end
       users.each do |user, password|
         resources = resources_by_user[user]
-        ec2 = self.connection(user, password)
-        instances = Puppet::Util::Fog.user_instances(ec2)
+        connection = self.connection(user, password)
+        instances = Puppet::Util::Fog.user_instances(connection)
         resources_by_user[user].each do |res|
           if instances and instances[res[:name]]
             res.provider = instances[res[:name]]
@@ -67,7 +67,7 @@ Puppet::Type.type(:instance).provide(:ec2) do
   # don't see how this will work.
   #
   def self.instances
-   raise Puppet::Error, 'instances does not work for ec2, a username and password is needed'
+    raise Puppet::Error, 'instances does not work for ec2, a username and password is needed'
   end
 
 end
