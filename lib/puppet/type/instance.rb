@@ -20,13 +20,6 @@ Puppet::Type.newtype(:instance) do
 
   newparam(:flavor) do
 
-    #this shoudl be handled at the provider
-    #VALID_TYPES = [ 't1.micro', 'm1.small' ]
-    #newvalues(*VALID_TYPES)
-    #munge do |value|
-    #  value.downcase
-    #end
-    #defaultto 't1.micro'
   end
 
   newparam(:location) do
