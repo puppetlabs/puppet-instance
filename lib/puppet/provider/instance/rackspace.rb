@@ -1,4 +1,5 @@
 require 'fog'
+require 'puppet/util/fog'
 
 Puppet::Type.type(:instance).provide(:rackspace) do
 
@@ -13,26 +14,6 @@ Puppet::Type.type(:instance).provide(:rackspace) do
     Fog::Compute.new(opts)
   end
 
-  def self.user_instances(rackspace)
-    results = {}
-
-    # Get a list of all the instances, then parse out the tags to see which ones I have created
-    instances = rackspace.servers.each do |s|
-      if s.metadata["Name"] != nil and s.metadata["CreatedBy"] == "Puppet"
-        instance_name = s.metadata["Name"]
-        results[instance_name] = new(
-          :name   => instance_name,
-          :ensure => s.state.to_sym,
-          :id     => s.id,
-          :flavor => s.flavor_id,
-          :image  => s.image_id,
-          :status => s.state,
-        )
-      end
-    end
-    results
-  end
-
   def self.prefetch(resources)
     if resources.is_a? Hash
       resources_by_user = {}
@@ -45,7 +26,7 @@ Puppet::Type.type(:instance).provide(:rackspace) do
       users.each do |user, password|
         resources = resources_by_user[user]
         rackspace = self.connection(user, password)
-        instances = self.user_instances(rackspace)
+        instances = Puppet::Util::Fog.user_instances(rackspace)
         resources_by_user[user].each do |res|
           if instances and instances[res[:name]]
             res.provider = instances[res[:name]]
