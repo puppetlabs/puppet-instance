@@ -5,9 +5,8 @@ class Puppet::Util::Fog
   def self.user_instances(compute)
     results = {}
 
-    # Get a list of all the instances, then parse out the tags to see which ones I have created
+    # Get a list of all the instances, then parse out the tags to see which ones are owned by this uer
     instances = compute.servers.each do |s|
-      pp s
       if s.metadata["Name"] != nil and s.metadata["CreatedBy"] == "Puppet"
         instance_name = s.metadata["Name"]
         results[instance_name] = new(

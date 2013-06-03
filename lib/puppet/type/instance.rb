@@ -1,11 +1,12 @@
 Puppet::Type.newtype(:instance) do
   @doc = "Instance provisioning with puppet."
 
+  feature :endpoint, "The API endpoint to create a connection to."
+
   ensurable
 
   newparam(:name, :namevar => true) do
     desc "unique name of instance"
-    isnamevar
   end
 
   newparam(:user) do
@@ -13,13 +14,12 @@ Puppet::Type.newtype(:instance) do
     isrequired
   end
 
-  newparam(:pass) do
+  newparam(:pass, :isrequired => true) do
     desc "Password"
-    isrequired
   end
 
-  newparam(:flavor) do
-
+  newparam(:flavor, :required_features => :flavors) do
+    desc "Instance flavors, provider dependant."
   end
 
   newparam(:location) do
@@ -27,6 +27,10 @@ Puppet::Type.newtype(:instance) do
   end
 
   newparam(:image) do
+    isrequired
+  end
+
+  newparam(:endpoint, :required_features => :endpoint) do
     isrequired
   end
 

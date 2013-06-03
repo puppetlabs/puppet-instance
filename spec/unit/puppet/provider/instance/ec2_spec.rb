@@ -6,10 +6,6 @@ provider_class = Puppet::Type.type(:instance).provider(:ec2)
 
 describe provider_class do
 
-  before :all do
-
-  end
-
   let(:name) { 'test01' }
   let(:ec2) { 'ec2' }
 
