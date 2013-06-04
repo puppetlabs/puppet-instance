@@ -31,7 +31,12 @@ Puppet::Type.newtype(:instance) do
   end
 
   newparam(:endpoint, :required_features => :endpoint) do
-    isrequired
+  end
+
+  newparam(:insecure, :required_features => :endpoint) do
+  end
+
+  newparam(:pool) do
   end
 
 end
