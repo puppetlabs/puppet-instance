@@ -6,10 +6,6 @@ provider_class = Puppet::Type.type(:instance).provider(:rackspace)
 
 describe provider_class do
 
-  before :all do
-
-  end
-
   let(:name) { 'test01' }
   let(:rackspace) { 'rackspace' }
 
@@ -28,25 +24,21 @@ describe provider_class do
   let (:provider) { resource.provider }
 
   context "::instances" do
-    it "should implement an instances method" do
-      provider.class.should respond_to(:instances)
-    end
-
-    it "should error when the instances method is called" do
+    it "should error when the instances method is called since no user or pass is available" do
       expect { provider.class.instances }.to raise_error Puppet::Error, /username and password/
     end
   end
 
   context "::prefetch" do
-    it "should return nil when passed an argument other than a hash" do
+    it "should return raise an error when an argument other than a hash" do
       expect { provider.class.prefetch(String.new) }.to raise_error Puppet::Error, /resources must be a hash/
     end
   end
 
   context "::create" do
-    it "should return a Fog::Compute::Rackspace::Server instance" do
-      provider.stubs(:get_image).returns(true)
-      provider.stubs(:get_flavor).returns(true)
+    it "should return a Fog::Compute::RackspaceV2::Server instance" do
+      provider.stub(:get_image) { true }
+      provider.stub(:get_flavor) { true }
       i = provider.create
       i.should be_a_kind_of(Fog::Compute::RackspaceV2::Server)
     end
