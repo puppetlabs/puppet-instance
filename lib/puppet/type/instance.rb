@@ -5,7 +5,8 @@ Puppet::Type.newtype(:instance) do
   create a connection."
 
   feature :bootable, "The provider has a distinction between creating and
-  booting the instance."
+  booting the instance.",
+    :methods => [:start,:stop]
 
   newparam(:name, :namevar => true) do
     desc "unique name of instance"
@@ -51,8 +52,24 @@ Puppet::Type.newtype(:instance) do
   newparam(:pool) do
   end
 
-  newproperty(:ensure) do
+  ensurable do
     desc("What state the instance should be in.")
+
+    newvalue(:present, :event => :instance_created) do
+      provider.create
+    end
+
+    newvalue(:absent, :event => :instance_destroyed) do
+      provider.destroy
+    end
+
+    newvalue(:running, :event => :instance_booted, :required_features => :bootable) do
+      provider.start
+    end
+
+    newvalue(:stopped, :event => :instance_stopped, :required_features => :bootable) do
+      provider.stop
+    end
 
     defaultto :present
   end
