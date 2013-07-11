@@ -1,7 +1,10 @@
 require 'fog'
 require 'puppet/util/fog'
+require 'pp'
 
 Puppet::Type.type(:instance).provide(:ec2) do
+
+  defaultfor :true => :true
 
   def self.connection(user,pass,region='us-west-2')
     opts = {
@@ -16,10 +19,12 @@ Puppet::Type.type(:instance).provide(:ec2) do
   def self.get_instances(compute)
     results = {}
 
-    # Get a list of all the instances, then parse out the tags to see which ones are owned by this uer
+    # Get a list of all the instances, then parse out the tags to see which
+    # ones are owned by this uer
+    debug compute.servers.inspect
     instances = compute.servers.each do |s|
-      if s.metadata["Name"] != nil and s.metadata["CreatedBy"] == "Puppet"
-        instance_name = s.metadata["Name"]
+      if s.tags["Name"] != nil and s.tags["CreatedBy"] == "Puppet"
+        instance_name = s.tags["Name"]
         results[instance_name] = new(
           :name   => instance_name,
           :ensure => s.state.to_sym,
@@ -30,6 +35,7 @@ Puppet::Type.type(:instance).provide(:ec2) do
         )
       end
     end
+
     results
   end
 
@@ -63,11 +69,16 @@ Puppet::Type.type(:instance).provide(:ec2) do
   end
 
   def create
-    tags = {:Name => resource[:name], :CreatedBy => 'Puppet'}
+    tags = {
+      :Name => resource[:name],
+      :CreatedBy => 'Puppet'
+    }
     ec2 = self.class.connection(resource[:user], resource[:pass])
-    ec2.servers.create(:image_id => resource[:image],
-                       :flavor_id => resource[:flavor],
-                       :tags => tags)
+    ec2.servers.create(
+      :image_id => resource[:image],
+      :flavor_id => resource[:flavor],
+      :tags => tags
+    )
   end
 
   def destroy
