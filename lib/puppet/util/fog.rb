@@ -1,7 +1,5 @@
 class Puppet::Util::Fog
 
-  require 'pp'
-
   def self.user_instances(compute)
     results = {}
 

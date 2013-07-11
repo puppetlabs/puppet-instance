@@ -1,11 +1,14 @@
 require 'fog'
 require 'puppet/util/fog'
+require 'pp'
 
 Puppet::Type.type(:instance).provide(:ec2) do
 
+  defaultfor :true => :true
+
   def self.connection(user,pass,region='us-west-2')
     opts = {
-      :provider              => 'AWS',
+      :provider              => 'aws',
       :aws_access_key_id     => user,
       :aws_secret_access_key => pass,
       :region                => region,
@@ -13,11 +16,34 @@ Puppet::Type.type(:instance).provide(:ec2) do
     Fog::Compute.new(opts)
   end
 
+  def self.get_instances(compute)
+    results = {}
+
+    # Get a list of all the instances, then parse out the tags to see which
+    # ones are owned by this uer
+    debug compute.servers.inspect
+    instances = compute.servers.each do |s|
+      if s.tags["Name"] != nil and s.tags["CreatedBy"] == "Puppet"
+        instance_name = s.tags["Name"]
+        results[instance_name] = new(
+          :name   => instance_name,
+          :ensure => s.state.to_sym,
+          :id     => s.id,
+          :flavor => s.flavor_id,
+          :image  => s.image_id,
+          :status => s.state,
+        )
+      end
+    end
+
+    results
+  end
+
   #
   # figure out which instances currently exist!
   #
   # this is a little complicated... for performance reasons.
-  # I wanted to do a single operation to calculate all of the 
+  # I wanted to do a single operation to calculate all of the
   # instance information
   def self.prefetch(resources)
     if resources.is_a? Hash
@@ -29,9 +55,8 @@ Puppet::Type.type(:instance).provide(:ec2) do
         users[resource[:user]] ||= resource[:pass]
       end
       users.each do |user, password|
-        resources = resources_by_user[user]
         connection = self.connection(user, password)
-        instances = Puppet::Util::Fog.user_instances(connection)
+        instances = get_instances(connection)
         resources_by_user[user].each do |res|
           if instances and instances[res[:name]]
             res.provider = instances[res[:name]]
@@ -44,11 +69,16 @@ Puppet::Type.type(:instance).provide(:ec2) do
   end
 
   def create
-    tags = {:Name => resource[:name], :CreatedBy => 'Puppet'}
+    tags = {
+      :Name => resource[:name],
+      :CreatedBy => 'Puppet'
+    }
     ec2 = self.class.connection(resource[:user], resource[:pass])
-    ec2.servers.create(:image_id => resource[:image],
-                       :flavor_id => resource[:flavor],
-                       :tags => tags)
+    ec2.servers.create(
+      :image_id => resource[:image],
+      :flavor_id => resource[:flavor],
+      :tags => tags
+    )
   end
 
   def destroy
