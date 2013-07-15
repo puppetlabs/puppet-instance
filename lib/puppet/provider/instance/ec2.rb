@@ -6,6 +6,8 @@ Puppet::Type.type(:instance).provide(:ec2) do
 
   defaultfor :true => :true
 
+  has_feature :load_balancer_member
+
   def self.connection(user,pass,region='us-west-2')
     opts = {
       :provider              => 'aws',
@@ -21,9 +23,9 @@ Puppet::Type.type(:instance).provide(:ec2) do
 
     # Get a list of all the instances, then parse out the tags to see which
     # ones are owned by this uer
-    debug compute.servers.inspect
     instances = compute.servers.each do |s|
       if s.tags["Name"] != nil and s.tags["CreatedBy"] == "Puppet"
+        debug s.inspect
         instance_name = s.tags["Name"]
         results[instance_name] = new(
           :name   => instance_name,
@@ -36,7 +38,11 @@ Puppet::Type.type(:instance).provide(:ec2) do
       end
     end
 
-    results
+    if results.size > 0
+      return results
+    else
+      return nil
+    end
   end
 
   #
@@ -74,11 +80,16 @@ Puppet::Type.type(:instance).provide(:ec2) do
       :CreatedBy => 'Puppet'
     }
     ec2 = self.class.connection(resource[:user], resource[:pass])
-    ec2.servers.create(
+    server = ec2.servers.create(
       :image_id => resource[:image],
       :flavor_id => resource[:flavor],
       :tags => tags
     )
+    @property_hash[:id] = server.id
+    debug @property_hash.inspect
+    unless resource[:load_balancer].nil?
+      ensure_load_balancer_member
+    end
   end
 
   def destroy
@@ -89,15 +100,59 @@ Puppet::Type.type(:instance).provide(:ec2) do
 
   def exists?
     debug @property_hash.inspect
-    !(@property_hash[:ensure] == :absent or @property_hash.empty?)
+    @property_hash and [:running,:pending].include?(@property_hash[:ensure])
   end
 
+  def load_balancer
+    is_load_balancer_member?
+  end
+
+  def load_balancer=(lb)
+    if @property_hash[:id]
+      elb = Puppet::Type::Loadbalancer::ProviderElb.connection(
+        resource[:user],
+        resource[:pass],
+      )
+      elb.register_instances_with_load_balancer(
+        @property_hash[:id],
+        lb,
+      )
+    end
+    nil
+  end
+
+
   #
-  # Short of storing credentials on disk somewhere and then referencing them, I
-  # don't see how this will work.
+  # Check to see if the current instance is a member of the load_balancer
   #
-  def self.instances
-    raise Puppet::Error, 'instances does not work for ec2, a username and password is needed'
+  # This requires creating a connection instance for ELB, finding the load
+  # balanacer and testing its instances method to see if our current
+  # resource[:id] is included.
+  #
+  # We return the name of the load balancer if true
+  #
+  # If we are not found, we return false.
+  #
+  # If the property_hash is empty, then we return nil.
+  #
+  def is_load_balancer_member?
+    if @property_hash.size > 0
+      elb = Puppet::Type::Loadbalancer::ProviderElb.connection(
+        resource[:user],
+        resource[:pass],
+      )
+      load_balancer = elb.load_balancers.find {|lb|
+        lb.id == resource[:load_balancer]
+      }
+      if load_balancer and load_balancer.instances.include?(@property_hash[:id])
+        debug "Instance #{@property_hash[:id]} already a member of #{resource[:load_balancer]}"
+        return resource[:load_balancer]
+      else
+        debug "Registering #{@property_hash[:id]} with #{resource[:load_balancer]}"
+        return false
+      end
+    end
+    nil
   end
 
 end
