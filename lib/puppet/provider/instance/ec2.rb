@@ -8,6 +8,15 @@ Puppet::Type.type(:instance).provide(:ec2) do
 
   has_feature :load_balancer_member
 
+
+  #
+  # define initialize here for the flush property
+  #
+  def initialize(value={})
+    super(value)
+    @property_flush = {}
+  end
+
   def self.connection(user,pass,region='us-west-2')
     opts = {
       :provider              => 'aws',
@@ -15,6 +24,7 @@ Puppet::Type.type(:instance).provide(:ec2) do
       :aws_secret_access_key => pass,
       :region                => region,
     }
+    debug "Creating connection to Ec2"
     Fog::Compute.new(opts)
   end
 
@@ -87,9 +97,21 @@ Puppet::Type.type(:instance).provide(:ec2) do
     )
     @property_hash[:id] = server.id
     debug @property_hash.inspect
-    #unless resource[:load_balancer].nil?
-    #  load_balancer=(resource[:load_balancer])
-    #end
+
+    #
+    # Since instance registration with a load balancer is something that is
+    # handled differently than instance creation, we must call this separatly.
+    #
+    # This is strange, since we could potentially be successful in creating the
+    # instance, but unsuccessful at registering wiht the load balancer. In this
+    # even, the resource would apear to fail at creation.  I am not sure how to
+    # do this otherwise.
+    #
+    debug resource[:load_balancer].inspect
+    unless resource[:load_balancer].nil?
+      load_balancer=(resource[:load_balancer])
+      flush
+    end
   end
 
   def destroy
@@ -103,24 +125,48 @@ Puppet::Type.type(:instance).provide(:ec2) do
     @property_hash and [:running,:pending].include?(@property_hash[:ensure])
   end
 
+
+  #
+  ## Properties
+
   def load_balancer
     is_load_balancer_member?
   end
 
-  def load_balancer=(lb)
-    if @property_hash[:id]
-      elb = Puppet::Type::Loadbalancer::ProviderElb.connection(
-        resource[:user],
-        resource[:pass],
-      )
-      elb.register_instances_with_load_balancer(
-        @property_hash[:id],
-        lb,
-      )
-    end
-    nil
+  def load_balancer=(value)
+    #if @property_hash[:id]
+    #  elb = Puppet::Type::Loadbalancer::ProviderElb.connection(
+    #    resource[:user],
+    #    resource[:pass],
+    #  )
+    #  elb.register_instances_with_load_balancer(
+    #    @property_hash[:id],
+    #    lb,
+    #  )
+    #end
+    #nil
+    @property_flush[:load_balancer] = value
   end
 
+  def flush
+    debug "Flushing properties"
+    if @property_flush[:load_balancer]
+        if @property_hash[:id]
+          elb = Puppet::Type::Loadbalancer::ProviderElb.connection(
+            resource[:user],
+            resource[:pass],
+          )
+          debug "Registering instance #{@property_hash[:id]} with #{@property_flush[:load_balancer]}"
+          elb.register_instances_with_load_balancer(
+            @property_hash[:id],
+            @property_flush[:load_balancer],
+          )
+        end
+    end
+    @property_hash = resource.to_hash
+  end
+
+  private
 
   #
   # Check to see if the current instance is a member of the load_balancer
@@ -136,6 +182,7 @@ Puppet::Type.type(:instance).provide(:ec2) do
   # If the property_hash is empty, then we return nil.
   #
   def is_load_balancer_member?
+    debug "checking load balancer membership"
     if @property_hash.size > 0
       elb = Puppet::Type::Loadbalancer::ProviderElb.connection(
         resource[:user],
