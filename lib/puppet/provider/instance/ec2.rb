@@ -8,15 +8,6 @@ Puppet::Type.type(:instance).provide(:ec2) do
 
   has_feature :load_balancer_member
 
-
-  #
-  # define initialize here for the flush property
-  #
-  def initialize(value={})
-    super(value)
-    @property_flush = {}
-  end
-
   def self.connection(user,pass,region='us-west-2')
     opts = {
       :provider              => 'aws',
@@ -37,14 +28,15 @@ Puppet::Type.type(:instance).provide(:ec2) do
       if s.tags["Name"] != nil and s.tags["CreatedBy"] == "Puppet"
         debug s.inspect
         instance_name = s.tags["Name"]
-        results[instance_name] = new(
+        result_hash = {
           :name   => instance_name,
           :ensure => s.state.to_sym,
           :id     => s.id,
           :flavor => s.flavor_id,
           :image  => s.image_id,
           :status => s.state,
-        )
+        }
+        results[instance_name] = new(result_hash)
       end
     end
 
@@ -85,39 +77,14 @@ Puppet::Type.type(:instance).provide(:ec2) do
   end
 
   def create
-    tags = {
-      :Name => resource[:name],
-      :CreatedBy => 'Puppet'
-    }
-    ec2 = self.class.connection(resource[:user], resource[:pass])
-    server = ec2.servers.create(
-      :image_id => resource[:image],
-      :flavor_id => resource[:flavor],
-      :tags => tags
-    )
-    @property_hash[:id] = server.id
-    debug @property_hash.inspect
-
-    #
-    # Since instance registration with a load balancer is something that is
-    # handled differently than instance creation, we must call this separatly.
-    #
-    # This is strange, since we could potentially be successful in creating the
-    # instance, but unsuccessful at registering wiht the load balancer. In this
-    # even, the resource would apear to fail at creation.  I am not sure how to
-    # do this otherwise.
-    #
-    debug resource[:load_balancer].inspect
-    unless resource[:load_balancer].nil?
-      load_balancer=(resource[:load_balancer])
-      flush
-    end
+    @property_hash = resource.to_hash
   end
 
   def destroy
     ec2 = self.class.connection(resource[:user], resource[:pass])
     instance = ec2.servers.get(@property_hash[:id])
     instance.destroy
+    @property_hash.clear
   end
 
   def exists?
@@ -125,41 +92,46 @@ Puppet::Type.type(:instance).provide(:ec2) do
     @property_hash and [:running,:pending].include?(@property_hash[:ensure])
   end
 
-
-  #
-  ## Properties
-
   def load_balancer
     is_load_balancer_member?
   end
 
   def load_balancer=(value)
-    #if @property_hash[:id]
-    #  elb = Puppet::Type::Loadbalancer::ProviderElb.connection(
-    #    resource[:user],
-    #    resource[:pass],
-    #  )
-    #  elb.register_instances_with_load_balancer(
-    #    @property_hash[:id],
-    #    lb,
-    #  )
-    #end
-    #nil
-    @property_flush[:load_balancer] = value
+    @property_hash[:load_balancer] = value
   end
 
   def flush
     debug "Flushing properties"
-    if @property_flush[:load_balancer]
+
+    # Create the instance
+    if [:running,:present].include?(@property_hash[:ensure])
+      debug "creating instance #{@property_hash[:id]}"
+
+      tags = {
+        :Name => resource[:name],
+        :CreatedBy => 'Puppet'
+      }
+      ec2 = self.class.connection(resource[:user], resource[:pass])
+      server = ec2.servers.create(
+        :image_id => resource[:image],
+        :flavor_id => resource[:flavor],
+        :tags => tags
+      )
+
+      @property_hash[:id] = server.id
+    end
+
+    # Register with the load balancer
+    if @property_hash[:load_balancer]
         if @property_hash[:id]
+          debug "Registering instance #{@property_hash[:id]} with #{@property_hash[:load_balancer]}"
           elb = Puppet::Type::Loadbalancer::ProviderElb.connection(
             resource[:user],
             resource[:pass],
           )
-          debug "Registering instance #{@property_hash[:id]} with #{@property_flush[:load_balancer]}"
           elb.register_instances_with_load_balancer(
             @property_hash[:id],
-            @property_flush[:load_balancer],
+            @property_hash[:load_balancer],
           )
         end
     end
