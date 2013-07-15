@@ -52,6 +52,7 @@ Puppet::Type.newtype(:instance) do
 
   newproperty(:load_balancer, :required_features => :load_balancer_member) do
     desc "The load balancer to which the instance should be a pool member"
+
   end
 
   newparam(:pool) do
@@ -77,6 +78,10 @@ Puppet::Type.newtype(:instance) do
     end
 
     defaultto :present
+  end
+
+  autorequire(:loadbalancer) do
+    self[:load_balancer]
   end
 
 end

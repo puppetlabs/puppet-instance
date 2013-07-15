@@ -87,9 +87,9 @@ Puppet::Type.type(:instance).provide(:ec2) do
     )
     @property_hash[:id] = server.id
     debug @property_hash.inspect
-    unless resource[:load_balancer].nil?
-      ensure_load_balancer_member
-    end
+    #unless resource[:load_balancer].nil?
+    #  load_balancer=(resource[:load_balancer])
+    #end
   end
 
   def destroy
