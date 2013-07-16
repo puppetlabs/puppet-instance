@@ -80,12 +80,6 @@ describe provider_class do
     end
   end
 
-  describe "when getting instances" do
-    it "should error when the instances method is called" do
-      expect { provider_class.instances }.to raise_error Puppet::Error, /username and password/
-    end
-  end
-
   #context "::create" do
   #  subject { provider_class }
   #  it "should return a Fog::Compute::AWS::Server instance" do

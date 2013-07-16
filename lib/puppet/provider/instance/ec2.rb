@@ -15,6 +15,7 @@ Puppet::Type.type(:instance).provide(:ec2) do
       :aws_secret_access_key => pass,
       :region                => region,
     }
+    debug "Creating connection to Ec2"
     Fog::Compute.new(opts)
   end
 
@@ -27,14 +28,15 @@ Puppet::Type.type(:instance).provide(:ec2) do
       if s.tags["Name"] != nil and s.tags["CreatedBy"] == "Puppet"
         debug s.inspect
         instance_name = s.tags["Name"]
-        results[instance_name] = new(
+        result_hash = {
           :name   => instance_name,
           :ensure => s.state.to_sym,
           :id     => s.id,
           :flavor => s.flavor_id,
           :image  => s.image_id,
           :status => s.state,
-        )
+        }
+        results[instance_name] = new(result_hash)
       end
     end
 
@@ -75,27 +77,14 @@ Puppet::Type.type(:instance).provide(:ec2) do
   end
 
   def create
-    tags = {
-      :Name => resource[:name],
-      :CreatedBy => 'Puppet'
-    }
-    ec2 = self.class.connection(resource[:user], resource[:pass])
-    server = ec2.servers.create(
-      :image_id => resource[:image],
-      :flavor_id => resource[:flavor],
-      :tags => tags
-    )
-    @property_hash[:id] = server.id
-    debug @property_hash.inspect
-    #unless resource[:load_balancer].nil?
-    #  load_balancer=(resource[:load_balancer])
-    #end
+    @property_hash = resource.to_hash
   end
 
   def destroy
     ec2 = self.class.connection(resource[:user], resource[:pass])
     instance = ec2.servers.get(@property_hash[:id])
     instance.destroy
+    @property_hash.clear
   end
 
   def exists?
@@ -107,20 +96,49 @@ Puppet::Type.type(:instance).provide(:ec2) do
     is_load_balancer_member?
   end
 
-  def load_balancer=(lb)
-    if @property_hash[:id]
-      elb = Puppet::Type::Loadbalancer::ProviderElb.connection(
-        resource[:user],
-        resource[:pass],
-      )
-      elb.register_instances_with_load_balancer(
-        @property_hash[:id],
-        lb,
-      )
-    end
-    nil
+  def load_balancer=(value)
+    @property_hash[:load_balancer] = value
   end
 
+  def flush
+    debug "Flushing properties"
+
+    # Create the instance
+    if [:running,:present].include?(@property_hash[:ensure])
+      debug "creating instance #{@property_hash[:id]}"
+
+      tags = {
+        :Name => resource[:name],
+        :CreatedBy => 'Puppet'
+      }
+      ec2 = self.class.connection(resource[:user], resource[:pass])
+      server = ec2.servers.create(
+        :image_id => resource[:image],
+        :flavor_id => resource[:flavor],
+        :tags => tags
+      )
+
+      @property_hash[:id] = server.id
+    end
+
+    # Register with the load balancer
+    if @property_hash[:load_balancer]
+        if @property_hash[:id]
+          debug "Registering instance #{@property_hash[:id]} with #{@property_hash[:load_balancer]}"
+          elb = Puppet::Type::Loadbalancer::ProviderElb.connection(
+            resource[:user],
+            resource[:pass],
+          )
+          elb.register_instances_with_load_balancer(
+            @property_hash[:id],
+            @property_hash[:load_balancer],
+          )
+        end
+    end
+    @property_hash = resource.to_hash
+  end
+
+  private
 
   #
   # Check to see if the current instance is a member of the load_balancer
@@ -136,6 +154,7 @@ Puppet::Type.type(:instance).provide(:ec2) do
   # If the property_hash is empty, then we return nil.
   #
   def is_load_balancer_member?
+    debug "checking load balancer membership"
     if @property_hash.size > 0
       elb = Puppet::Type::Loadbalancer::ProviderElb.connection(
         resource[:user],
