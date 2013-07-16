@@ -105,7 +105,7 @@ Puppet::Type.type(:instance).provide(:ec2) do
 
     # Create the instance
     if [:running,:present].include?(@property_hash[:ensure])
-      debug "creating instance #{@property_hash[:id]}"
+      debug "creating instance #{@property_hash[:name]}"
 
       tags = {
         :Name => resource[:name],
