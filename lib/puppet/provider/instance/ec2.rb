@@ -225,7 +225,6 @@ Puppet::Type.type(:instance).provide(:ec2) do
     load_balancer = @loadbalancer_connection.load_balancers.find {|lb|
       lb.id == name
     }
-
   end
 
   #
@@ -260,18 +259,15 @@ Puppet::Type.type(:instance).provide(:ec2) do
   end
 
   #
-  # The resource 'id' is a collected paramater, and is
-  # only available in the @property_hash.  We set the
-  # resource[:id] here to the value of the collected
-  # property, so that other resources may look up the
-  # resource by name, and have access to the :id that
-  # was discovered as part of the @property_hash
-  # creation.
+  # The resource 'id' is a collected paramater, and is only available in the
+  # @property_hash.  We set the resource[:id] here to the value of the
+  # collected property, so that other resources may look up the resource by
+  # name, and have access to the :id that was discovered as part of the
+  # @property_hash creation.
   #
   def set_resource_id
     if @property_hash[:id]
       resource[:id] ||= @property_hash[:id]
     end
   end
-
 end
