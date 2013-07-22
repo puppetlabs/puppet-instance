@@ -2,59 +2,84 @@
 require 'spec_helper'
 require 'puppet/provider/instance/rackspace'
 
-provider_class = Puppet::Type.type(:instance).provider(:rackspace)
+type_class     = Puppet::Type.type(:instance)
+provider_class = type_class.provider(:rackspace)
 
 describe provider_class do
 
-  let(:name) { 'test01' }
-  let(:rackspace) { 'rackspace' }
-
-  let(:resource) do
-    Puppet::Type.type(:instance).new(
-      :name     => name,
-      :provider => rackspace,
-      :user     => '03LT76nOvVp4dxMbon9B',
-      :pass     => 'RoALhcMiRFb5m2WkqkoyPg4BMSI5LEf7uG0RRnWG',
+  let(:params_one) {
+    {
+      :name     => 'one',
       :location => 'ord',
       :flavor   => '2',
-      :image    => 'Debian 7.0 (wheezy)'
-    )
-  end
+      :connection => 'moo',
+    }
+  }
 
-  let (:provider) { resource.provider }
+  let(:params_two) {
+    {
+      :name       => 'two',
+      :location   => 'ord',
+      :flavor     => '2',
+      :connection => 'moo',
+    }
+  }
 
-  context "::instances" do
-    it "should error when the instances method is called since no user or pass is available" do
-      expect { provider.class.instances }.to raise_error Puppet::Error, /username and password/
+  let(:params_not) {
+    {
+      :name       => 'not',
+      :location   => 'ord',
+      :flavor     => '2',
+      :connection => 'moo',
+    }
+  }
+
+  let(:params_connection) {
+    {
+      :name => 'moo',
+      :user => 'user1',
+      :pass => 'secret',
+    }
+  }
+
+  describe "when prefetching" do
+    subject { provider_class }
+
+    let (:provider_one) { subject.new(params_one.merge({:provider => subject})) }
+    let (:provider_two) { subject.new(params_two.merge({:provider => subject})) }
+
+    let(:resources) do
+      [params_one, params_two].inject({}) do |rec, params|
+        rec[params[:name]] = type_class.new(params)
+        rec
+      end
+    end
+
+    before do
+      subject.stub(:get_instances) {
+        {
+          "one" => provider_one,
+          "two" => provider_two,
+        }
+      }
+
+      resources['one'].stub(:get_creds) { params_connection }
+      resources['two'].stub(:get_creds) { params_connection }
+    end
+
+
+    it "should update resources with existing providers" do
+      resources['one'].should_receive(:provider=)
+      resources['two'].should_receive(:provider=)
+
+      subject.prefetch(resources)
+    end
+
+    it "should not update resources that don't have providers" do
+      resources['not'].should_not_receive(:provider=)
+
+      subject.prefetch(resources)
     end
   end
-
-  context "::prefetch" do
-    it "should return raise an error when an argument other than a hash" do
-      expect { provider.class.prefetch(String.new) }.to raise_error Puppet::Error, /resources must be a hash/
-    end
-  end
-
-  context "::create" do
-    it "should return a Fog::Compute::RackspaceV2::Server instance" do
-      provider.stub(:get_image) { true }
-      provider.stub(:get_flavor) { true }
-      i = provider.create
-      i.should be_a_kind_of(Fog::Compute::RackspaceV2::Server)
-    end
-  end
-
-  # This test doesn't work for some reason, I think due to the lack of fog
-  # actually mocking things for all providers
-  #context "::destroy" do
-  #  it "should return TrueClass when destroying an instance" do
-  #    provider.stubs(:get_image).returns(true)
-  #    provider.stubs(:get_flavor).returns(true)
-  #    i = provider.create
-  #    i.destroy
-  #    i.reload
-  #    expect(i.state).to eq("shutting-down")
-  #  end
-  #end
 
 end
