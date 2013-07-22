@@ -10,8 +10,6 @@ describe provider_class do
   let(:params_one) {
     {
       :name     => 'one',
-      :user     => '111',
-      :pass     => '111',
       :location => 'us-west-2',
       :flavor   => 't1.micro',
     }
@@ -19,21 +17,27 @@ describe provider_class do
 
   let(:params_two) {
     {
-      :name     => 'two',
-      :user     => '222',
-      :pass     => '222',
-      :location => 'us-west-2',
-      :flavor   => 't1.micro',
+      :name       => 'two',
+      :location   => 'us-west-2',
+      :flavor     => 't1.micro',
+      :connection => 'moo',
     }
   }
 
   let(:params_not) {
     {
-      :name     => 'not',
-      :user     => 'not',
-      :pass     => 'not',
-      :location => 'us-west-2',
-      :flavor   => 't1.micro',
+      :name       => 'not',
+      :location   => 'us-west-2',
+      :flavor     => 't1.micro',
+      :connection => 'moo',
+    }
+  }
+
+  let(:params_connection) {
+    {
+      :name => 'moo',
+      :user => 'user1',
+      :pass => 'secret',
     }
   }
 
@@ -50,6 +54,13 @@ describe provider_class do
     let (:provider_one) { subject.new(params_one.merge({:provider => subject})) }
     let (:provider_two) { subject.new(params_two.merge({:provider => subject})) }
 
+    let(:resources) do
+      [params_one, params_two].inject({}) do |rec, params|
+        rec[params[:name]] = type_class.new(params)
+        rec
+      end
+    end
+
     before do
       subject.stub(:get_instances) {
         {
@@ -57,14 +68,11 @@ describe provider_class do
           "two" => provider_two,
         }
       }
+
+      resources['one'].stub(:get_creds) { params_connection }
+      resources['two'].stub(:get_creds) { params_connection }
     end
 
-    let(:resources) do
-      [params_one, params_two].inject({}) do |rec, params|
-        rec[params[:name]] = type_class.new(params)
-        rec
-      end
-    end
 
     it "should update resources with existing providers" do
       resources['one'].should_receive(:provider=)
