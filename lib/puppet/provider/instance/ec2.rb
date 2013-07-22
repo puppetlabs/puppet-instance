@@ -269,7 +269,9 @@ Puppet::Type.type(:instance).provide(:ec2) do
   # creation.
   #
   def set_resource_id
-    resource[:id] ||= @property_hash[:id]
+    if @property_hash[:id]
+      resource[:id] ||= @property_hash[:id]
+    end
   end
 
 end
