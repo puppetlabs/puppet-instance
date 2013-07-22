@@ -9,9 +9,10 @@ describe provider_class do
 
   let(:params_one) {
     {
-      :name     => 'one',
-      :location => 'us-west-2',
-      :flavor   => 't1.micro',
+      :name       => 'one',
+      :location   => 'us-west-2',
+      :flavor     => 't1.micro',
+      :connection => 'moo',
     }
   }
 
@@ -40,13 +41,6 @@ describe provider_class do
       :pass => 'secret',
     }
   }
-
-  #let(:resource) do
-  #  type_class.new.new(:params_one)
-  #  )
-  #end
-
-  #let (:provider) { resource.provider }
 
   describe "when prefetching" do
     subject { provider_class }
