@@ -139,7 +139,6 @@ Puppet::Type.type(:instance).provide(:ec2) do
       server = @conn.servers.create(server_hash)
 
       @property_hash[:id] = server.id
-
     end
 
     # Register with the load balancer
