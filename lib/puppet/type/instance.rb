@@ -1,3 +1,7 @@
+require 'puppet_x/cloud/credentials'
+
+include PuppetX::Cloud::Credentials
+
 Puppet::Type.newtype(:instance) do
   @doc = "Instance provisioning with puppet."
 
@@ -10,6 +14,9 @@ Puppet::Type.newtype(:instance) do
 
   feature :load_balancer_member, "Used if the provider has support for adding
     instances to load balancers."
+
+  feature :sshkey, "The provider supports building instances with root ssh
+    authorized keys configured."
 
   newparam(:name, :namevar => true) do
     desc "unique name of instance"
@@ -47,6 +54,17 @@ Puppet::Type.newtype(:instance) do
 
   newparam(:id) do
     desc "The ID of the created instance"
+    # Collected parameter only.  Do not assign!
+  end
+
+  newparam(:ip_address) do
+    desc "The IP of the created instance"
+    # Collected parameter only.  Do not assign!
+  end
+
+  newparam(:dns_name) do
+    desc "The IP of the created instance"
+    # Collected parameter only.  Do not assign!
   end
 
   newproperty(:load_balancer, :required_features => :load_balancer_member) do
@@ -54,6 +72,10 @@ Puppet::Type.newtype(:instance) do
   end
 
   newparam(:pool) do
+    desc "The resource pool the instance should be in"
+  end
+
+  newparam(:key_name, :isrequired => true, :required_features => :sshkey) do
   end
 
   ensurable do
@@ -84,18 +106,6 @@ Puppet::Type.newtype(:instance) do
 
   autorequire(:connection) do
     self[:connection]
-  end
-
-  #
-  # This method searches the catalog for the resource type 'cloud_connection'
-  # by the title of the received connection name and retuns a hash of the
-  # username nad password from that resource.  This is here so that the cloud
-  # types can reference a resource with the credentials.
-  #
-  def get_creds(connection=self[:connection])
-    catalog.resources.find {|r|
-      r.is_a?(Puppet::Type.type(:cloud_connection)) && r[:name] == connection
-    }
   end
 
 end
