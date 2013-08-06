@@ -33,11 +33,11 @@ Puppet::Type.type(:instance).provide(:ec2) do
   end
 
   #
-  # Retrieves all properties from the server instance and returns hash
+  # Retrieves all properties from the server instance and return hash
   #
-  # Thsi is used in prefetching to collect the properties of the existing
+  # This is used in prefetching to collect the properties of the existing
   # instances.  It is also used when creating an instance for collecting the
-  # values from a newly created instance so those values end up in teh catalog
+  # values from a newly created instance so those values end up in the catalog
   # for searching and retrieval.
   #
   def self.collect_properties_from_server(server)
