@@ -1,11 +1,19 @@
 require 'fog'
 require 'pp'
+require 'puppet_x/cloud'
+require 'puppet_x/cloud/connection'
+require 'puppet_x/cloud/connection/ec2'
+
+include PuppetX::Cloud::Connection
+include PuppetX::Cloud::Connection::Ec2
 
 Puppet::Type.type(:instance).provide(:ec2) do
 
+  # How else?
   defaultfor :true => :true
 
   has_feature :load_balancer_member
+  has_feature :sshkey
 
   #
   # Connect to AWS
@@ -24,6 +32,32 @@ Puppet::Type.type(:instance).provide(:ec2) do
     Fog::Compute.new(opts)
   end
 
+  #
+  # Retrieves all properties from the server instance and returns hash
+  #
+  # Thsi is used in prefetching to collect the properties of the existing
+  # instances.  It is also used when creating an instance for collecting the
+  # values from a newly created instance so those values end up in teh catalog
+  # for searching and retrieval.
+  #
+  def self.collect_properties_from_server(server)
+    result_hash = {
+      :name       => server.tags["Name"],
+      :ensure     => server.state.to_sym,
+      :id         => server.id,
+      :ip_address => server.public_ip_address,
+      :dns_name   => server.dns_name,
+      :flavor     => server.flavor_id,
+      :image      => server.image_id,
+      :status     => server.state,
+    }
+    result_hash
+  end
+
+  #
+  # Given a connection, retrieve all instances that we have created, i.e.
+  # matching our "creation tags".
+  #
   def self.get_instances(conn)
     debug "matching existing instances to our manifest"
     results = {}
@@ -35,16 +69,20 @@ Puppet::Type.type(:instance).provide(:ec2) do
     conn.servers.each do |s|
       if s.tags["Name"] != nil and s.tags["CreatedBy"] == "Puppet"
         debug s.inspect
-        instance_name = s.tags["Name"]
-        result_hash = {
-          :name   => instance_name,
-          :ensure => s.state.to_sym,
-          :id     => s.id,
-          :flavor => s.flavor_id,
-          :image  => s.image_id,
-          :status => s.state,
-        }
-        results[instance_name] = new(result_hash)
+        result_hash = collect_properties_from_server(s)
+
+        #
+        # It is possible that an instance with the same name exists, but is
+        # terminated.  In such a case, we only want to add running or pening
+        # nodes to the @property_hash to signal that the nodes is indeed
+        # running, or on its way to running.  This will keep us from
+        # overwriting the state of a resource by the same title with incorrect
+        # state, since by all useful accounts a terminated node does not exist,
+        # even if it does.
+        #
+        if [:running,:pending].include?(result_hash[:ensure])
+          results[result_hash[:name]] = new(result_hash)
+        end
       end
     end
 
@@ -56,11 +94,12 @@ Puppet::Type.type(:instance).provide(:ec2) do
   end
 
   #
-  # figure out which instances currently exist!
+  # Figure out which instances currently exist.
   #
-  # this is a little complicated... for performance reasons.
-  # I wanted to do a single operation to calculate all of the
-  # instance information
+  # For every username and password combination, search for all instances and
+  # match the ones that match our tags.  This helps us weed out the instances
+  # that we have created, and those that exist for reasons outside our scope.
+  #
   def self.prefetch(resources)
     if resources.is_a? Hash
       resources_by_user = {}
@@ -106,7 +145,8 @@ Puppet::Type.type(:instance).provide(:ec2) do
     # guaranteed to be called ( that I know if ) then we set it here so it ends
     # up in the catalog.
     #
-    set_resource_id()
+    set_collected_properties()
+
     debug "performing existential inquisition: " + @property_hash.inspect
     @property_hash and [:running,:pending].include?(@property_hash[:ensure])
   end
@@ -127,90 +167,61 @@ Puppet::Type.type(:instance).provide(:ec2) do
     if [:running,:present].include?(@property_hash[:ensure])
       debug "creating instance #{@property_hash[:name]}"
 
+      # Our tag hash that we use to identify nodes we have created
       tags = {
-        :Name => resource[:name],
+        :Name      => resource[:name],
         :CreatedBy => 'Puppet'
       }
+
+      # Our parameters from the resource that are used for instance creation
       server_hash = {
-        :image_id => resource[:image],
+        :image_id  => resource[:image],
         :flavor_id => resource[:flavor],
-        :tags => tags
+        :tags      => tags
       }
+      server_hash[:key_name] = @property_hash[:key_name] if @property_hash[:key_name]
+      server_hash[:username] = 'root'
+
+      # Create the instance
       server = @conn.servers.create(server_hash)
 
-      @property_hash[:id] = server.id
+      # Add missing collected properties to the @property_hash
+      self.class.collect_properties_from_server(server).each {|k,v|
+        @property_hash[k] ||= v
+      }
     end
 
     # Register with the load balancer
-    if @property_hash[:load_balancer]
-        if @property_hash[:id]
-          debug "Registering instance #{@property_hash[:id]} with #{@property_hash[:load_balancer]}"
+    if @property_hash[:load_balancer] and @property_hash[:id]
+      debug "Registering instance #{@property_hash[:id]} with #{@property_hash[:load_balancer]}"
 
-          get_cloud_connection()
-
-          args = []
-          args << @connection_resource[:user]
-          args << @connection_resource[:pass]
-          args << @connection_resource[:location] if @connection_resource[:location]
-
-          elb = Puppet::Type::Loadbalancer::ProviderElb.connection(*args)
-          elb.register_instances_with_load_balancer(
-            @property_hash[:id],
-            @property_hash[:load_balancer],
-          )
-        end
-    end
-    @property_hash = resource.to_hash
-  end
-
-  private
-
-  #
-  # Get the connection object using the current resource paramaters
-  #
-  # Here we just return the existing connection object if it already exists or
-  # build it and return it.
-  #
-  # @conn is the connection object.  It is the fog resource that does the
-  # actual lifting.
-  #
-  def connect
-    if @conn
-      debug "found existing connection"
-      return @conn
-    else
       get_cloud_connection()
-
-      debug "exting connection not found"
 
       args = []
       args << @connection_resource[:user]
       args << @connection_resource[:pass]
       args << @connection_resource[:location] if @connection_resource[:location]
 
-      @conn = self.class.connection(*args)
-      return @conn
+      elb = Puppet::Type::Loadbalancer::ProviderElb.connection(*args)
+      elb.register_instances_with_load_balancer(
+        @property_hash[:id],
+        @property_hash[:load_balancer],
+      )
     end
+
+    # Set the properties of the resource we care about before we assign the
+    # resource to the property_hash.
+    set_collected_properties()
+
+    @property_hash = resource.to_hash
   end
 
-  #
-  # Get the credentials fom the type by searching through the catlog for the
-  # given connection resoruce.
-  #
-  # This is strictly a helper to ensure that we lookup the information only
-  # one time..
-  #
-  def get_cloud_connection
-    if @connection_resource
-      debug "found connection resource"
-      return @connection_resource
-    else
-      debug "searching for connection resource"
-      @connection_resource = resource.get_creds(resource[:connection])
-      return @connection_resource
-    end
-  end
+  private
 
+  #
+  # Given a resource name for the load balancer, retrive the Fog object for the
+  # Loadbalancer
+  #
   def get_loadbalancer(name=resource[:load_balancer])
     get_cloud_connection()
     args = []
@@ -258,15 +269,34 @@ Puppet::Type.type(:instance).provide(:ec2) do
   end
 
   #
-  # The resource 'id' is a collected paramater, and is only available in the
-  # @property_hash.  We set the resource[:id] here to the value of the
-  # collected property, so that other resources may look up the resource by
-  # name, and have access to the :id that was discovered as part of the
-  # @property_hash creation.
+  # There are a few resoruce properties that are collected paramaters, and is
+  # only available in the @property_hash.  We set the resource[:id] here to the
+  # value of the collected property, so that other resources may look up the
+  # resource by name, and have access to the :id that was discovered as part of
+  # the @property_hash creation.
   #
+  def set_collected_properties
+    set_resource_id()
+    set_resource_ip_address()
+    set_resource_dns_name()
+  end
+
   def set_resource_id
     if @property_hash[:id]
       resource[:id] ||= @property_hash[:id]
     end
   end
+
+  def set_resource_ip_address
+    if @property_hash[:ip_address]
+      resource[:ip_address] ||= @property_hash[:ip_address]
+    end
+  end
+
+  def set_resource_dns_name
+    if @property_hash[:dns_name]
+      resource[:dns_name] ||= @property_hash[:dns_name]
+    end
+  end
+
 end

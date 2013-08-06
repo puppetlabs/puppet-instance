@@ -1,2 +1,3 @@
 tests/test.pp
 Gemfile.lock
+shared/

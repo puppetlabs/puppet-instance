@@ -184,5 +184,4 @@ Puppet::Type.type(:instance).provide(:rackspace) do
     end
   end
 
-
 end

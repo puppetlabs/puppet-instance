@@ -20,7 +20,7 @@ describe instance do
     end
   end
 
-  parameters = [:name, :connection, :flavor, :location, :image, :endpoint, :insecure, :id, :pool]
+  parameters = [:name, :connection, :flavor, :location, :image, :endpoint, :insecure, :id, :pool, :key_name, :ip_address, :dns_name]
   parameters.each do |parameter|
     it "should have a #{parameter} paramater" do
       instance.attrtype(parameter).should eq(:param)
