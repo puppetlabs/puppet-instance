@@ -1,8 +1,14 @@
 require 'fog'
+require 'puppet_x/cloud'
+#require 'puppet_x/cloud/connection/rackspace'
+
+include PuppetX::Cloud::Connection
 
 Puppet::Type.type(:instance).provide(:rackspace) do
 
-  def self.connection(user,pass,region='ord')
+  has_feature :flavors
+
+  def self.connection(user,pass,region='dfw')
     opts = {
       :provider           => 'rackspace',
       :rackspace_username => user,
@@ -14,22 +20,39 @@ Puppet::Type.type(:instance).provide(:rackspace) do
     Fog::Compute.new(opts)
   end
 
+  #
+  # Retrieves all properties from the server instance and return hash
+  #
+  # This is used in prefetching to collect the properties of the existing
+  # instances.  It is also used when creating an instance for collecting the
+  # values from a newly created instance so those values end up in the catalog
+  # for searching and retrieval.
+  #
+  def self.collect_properties_from_server(server)
+    result_hash = {
+      :name       => server.metadata["Name"],
+      :ensure     => server.state.downcase.to_sym,
+      :id         => server.id,
+      :ip_address => server.ipv4_address,
+      :flavor     => server.flavor_id,
+      :image      => server.image_id,
+    }
+    result_hash
+  end
+
   def self.get_instances(conn)
     debug "matching existing instances to our manifest"
     results = {}
 
     # Get a list of all the instances, then parse out the tags to see which ones are owned by this uer
-    instances = conn.servers.each do |s|
+    conn.servers.each do |s|
       if s.metadata["Name"] != nil and s.metadata["CreatedBy"] == "Puppet"
-        instance_name = s.metadata["Name"]
-        results[instance_name] = new(
-          :name   => instance_name,
-          :ensure => s.state.to_sym,
-          :id     => s.id,
-          :flavor => s.flavor_id,
-          :image  => s.image_id,
-          :status => s.state,
-        )
+        debug s.inspect
+        result_hash = collect_properties_from_server(s)
+
+        if [:active,:build].include?(result_hash[:ensure])
+          results[result_hash[:name]] = new(result_hash)
+        end
       end
     end
     results
@@ -61,34 +84,11 @@ Puppet::Type.type(:instance).provide(:rackspace) do
     end
   end
 
-  def get_image(images)
-    # this is in a method simply because I couldn't figure out how to test it otherwise
-    image = images.find {|image| image.name =~ /#{Regexp.escape(resource[:image])}/}
-    if image.has_method?('id')
-      image.id
-    else
-      nil
-    end
-  end
-
-  def get_flavor(flavors)
-    # this is in a method simply because I couldn't figure out how to test it otherwise
-    flavor = flavors.find {|flavor| flavor.id == resource[:flavor]}
-    if flavor.has_method?('id')
-      flavor.id
-    else
-      nil
-    end
-  end
-
   def create
     connect()
 
     # set the meta used to identify the instance
     tags = {:Name => resource[:name], :CreatedBy => 'Puppet'}
-
-    # create the rackspace connection object
-    #rackspace = self.class.connection(resource[:user], resource[:pass])
 
     # search for the image id of the requested image
     images = @conn.images.find_all
@@ -97,11 +97,11 @@ Puppet::Type.type(:instance).provide(:rackspace) do
     if image_id
 
       # search for the flavor to verify it exists
-      flavors = rackspace.flavors.find_all
+      flavors = @conn.flavors.find_all
       flavor_id = get_flavor(flavors)
 
       if flavor_id
-        rackspace.servers.create(
+        @conn.servers.create(
           :name      => resource[:name],
           :image_id  => image_id,
           :flavor_id => flavor_id,
@@ -118,9 +118,10 @@ Puppet::Type.type(:instance).provide(:rackspace) do
   end
 
   def destroy
-    rackspace = self.class.connection(resource[:user], resource[:pass])
-    instance = rackspace.servers.get(@property_hash[:id])
+    connect()
+    instance = @conn.servers.get(@property_hash[:id])
     instance.destroy
+    @property_hash.clear
   end
 
   def exists?
@@ -128,60 +129,29 @@ Puppet::Type.type(:instance).provide(:rackspace) do
     !(@property_hash[:ensure] == :absent or @property_hash.empty?)
   end
 
-  #
-  # Short of storing credentials on disk somewhere and then referencing them, I
-  # don't see how this will work.
-  #
-  def self.instances
-   raise Puppet::Error, 'instances does not work for ec2, a username and password is needed'
-  end
-
   private
 
-  #
-  # Get the connection object using the current resource paramaters
-  #
-  # Here we just return the existing connection object if it already exists or
-  # build it and return it.
-  #
-  # @conn is the connection object.  It is the fog resource that does the
-  # actual lifting.
-  #
-  def connect
-    if @conn
-      debug "found existing connection"
-      return @conn
+  def get_image(images)
+    # this is in a method simply because I couldn't figure out how to test it otherwise
+    image = images.find {|image| image.name =~ /#{Regexp.escape(resource[:image])}/}
+    if image and image.respond_to?('id')
+      image.id
     else
-      get_cloud_connection()
-
-      debug "exting connection not found"
-
-      args = []
-      args << @connection_resource[:user]
-      args << @connection_resource[:pass]
-      args << @connection_resource[:location] if @connection_resource[:location]
-
-      @conn = self.class.connection(*args)
-      return @conn
+      nil
     end
   end
 
-  #
-  # Get the credentials fom the type by searching through the catlog for the
-  # given connection resoruce.
-  #
-  # This is strictly a helper to ensure that we lookup the information only
-  # one time..
-  #
-  def get_cloud_connection
-    if @connection_resource
-      debug "found connection resource"
-      return @connection_resource
+  def get_flavor(flavors)
+    # this is in a method simply because I couldn't figure out how to test it otherwise
+    flavor = flavors.find {|flavor| 
+      flavor.id == resource[:flavor]
+    }
+    if flavor and flavor.respond_to?('id')
+      flavor.id
     else
-      debug "searching for connection resource"
-      @connection_resource = resource.get_creds(resource[:connection])
-      return @connection_resource
+      nil
     end
   end
+
 
 end
