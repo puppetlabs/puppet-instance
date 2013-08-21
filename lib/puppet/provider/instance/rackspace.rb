@@ -7,6 +7,7 @@ include PuppetX::Cloud::Connection
 Puppet::Type.type(:instance).provide(:rackspace) do
 
   has_feature :flavors
+  has_feature :load_balanced
 
   def self.connection(user,pass,region='dfw')
     opts = {

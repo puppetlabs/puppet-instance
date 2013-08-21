@@ -10,7 +10,7 @@ Puppet::Type.type(:instance).provide(:ec2) do
   # How else?
   defaultfor :true => :true
 
-  has_feature :load_balancer_member
+  has_feature :load_balanced
   has_feature :sshkey
 
   #

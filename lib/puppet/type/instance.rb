@@ -12,7 +12,7 @@ Puppet::Type.newtype(:instance) do
     booting the instance.",
     :methods => [:start,:stop]
 
-  feature :load_balancer_member, "Used if the provider has support for adding
+  feature :load_balanced, "Used if the provider has support for adding
     instances to load balancers."
 
   feature :sshkey, "The provider supports building instances with root ssh
@@ -69,7 +69,7 @@ Puppet::Type.newtype(:instance) do
     # Collected parameter only.  Do not assign!
   end
 
-  newproperty(:load_balancer, :required_features => :load_balancer_member) do
+  newproperty(:load_balancer, :required_features => :load_balanced) do
     desc "The load balancer to which the instance should be a pool member"
   end
 
