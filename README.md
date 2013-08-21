@@ -52,3 +52,10 @@ README for information about the 'cloud_connection' type.  The 'connection'
 parameter here is the resource title of the 'cloud_connection' resource that
 you wish to use for API calls.
 
+# Copyright
+
+Puppet Labs 2013
+
+# License
+
+Apache 2.0
