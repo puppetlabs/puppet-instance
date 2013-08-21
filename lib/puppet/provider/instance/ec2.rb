@@ -2,10 +2,8 @@ require 'fog'
 require 'pp'
 require 'puppet_x/cloud'
 require 'puppet_x/cloud/connection'
-require 'puppet_x/cloud/connection/ec2'
 
 include PuppetX::Cloud::Connection
-include PuppetX::Cloud::Connection::Ec2
 
 Puppet::Type.type(:instance).provide(:ec2) do
 
@@ -49,7 +47,6 @@ Puppet::Type.type(:instance).provide(:ec2) do
       :dns_name   => server.dns_name,
       :flavor     => server.flavor_id,
       :image      => server.image_id,
-      :status     => server.state,
     }
     result_hash
   end

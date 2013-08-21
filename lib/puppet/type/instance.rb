@@ -18,6 +18,8 @@ Puppet::Type.newtype(:instance) do
   feature :sshkey, "The provider supports building instances with root ssh
     authorized keys configured."
 
+  feature :flavors, "The provider supports instance flavors."
+
   newparam(:name, :namevar => true) do
     desc "unique name of instance"
   end
