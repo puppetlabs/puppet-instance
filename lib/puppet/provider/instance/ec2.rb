@@ -1,10 +1,9 @@
 require 'fog'
 require 'pp'
 require 'puppet_x/cloud'
-require 'puppet_x/cloud/connection/ec2'
+require 'puppet_x/cloud/connection'
 
 include PuppetX::Cloud::Connection
-include PuppetX::Cloud::Connection::Ec2
 
 Puppet::Type.type(:instance).provide(:ec2) do
 
