@@ -14,7 +14,7 @@ task :default => :spec
 
 def sync_modules
   modules = {
-    'cloud_connection' => 'git@github.com:puppetlabs/puppet-cloud_connection.git',
+    'cloud_connection' => 'https://github.com/puppetlabs/puppet-cloud_connection.git',
   }
   modules.each {|name,url|
     %x{git clone #{url} shared/#{name}} unless File.directory?("shared/#{name}")
