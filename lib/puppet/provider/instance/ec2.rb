@@ -1,5 +1,4 @@
 require 'fog'
-require 'pp'
 require 'puppet_x/cloud'
 require 'puppet_x/cloud/connection'
 
@@ -78,6 +77,12 @@ Puppet::Type.type(:instance).provide(:ec2) do
         # even if it does.
         #
         if [:running,:pending].include?(result_hash[:ensure])
+          # Write the metadata out to a file
+          datastore = "#{Puppet[:vardir]}/moduledata/instances"
+          File.open("#{datastore}/#{result_hash[:name]}.yaml","w") do |f|
+            f.puts result_hash.to_yaml
+          end
+
           results[result_hash[:name]] = new(result_hash)
         end
       end
@@ -128,6 +133,10 @@ Puppet::Type.type(:instance).provide(:ec2) do
   end
 
   def destroy
+    # Remove the metadata file
+    datastore = "#{Puppet[:vardir]}/moduledata/instances"
+    File.unlink("#{datastore}/#{@property_hash[:name]}.yaml")
+
     connect()
     instance = @conn.servers.get(@property_hash[:id])
     instance.destroy
@@ -186,6 +195,12 @@ Puppet::Type.type(:instance).provide(:ec2) do
       self.class.collect_properties_from_server(server).each {|k,v|
         @property_hash[k] ||= v
       }
+
+      # Write the metadata out to a file
+      datastore = "#{Puppet[:vardir]}/moduledata/instances"
+      File.open("#{datastore}/#{@property_hash[:name]}.yaml","w") do |f|
+        f.puts @property_hash.to_yaml
+      end
     end
 
     # Register with the load balancer
